@@ -1,13 +1,13 @@
 {
     "openrouter_api_key": "YOUR_OPENROUTER_API_KEY_HERE",
-    "enable_vl": true,
+    "enable_vl": false,
     "user": {
-        "api": "http://127.0.0.1:28565",
+        "api": "http://127.0.0.1:8565",
         "gpt_sovits": "http://127.0.0.1:9880/tts"
     },
     "server": {
-        "qwen3": "http://localhost:11434",
-        "qwenvl": "http://localhost:11434"
+        "qwen3": "http://localhost:8565",
+        "qwenvl": "http://localhost:8565"
     },
     "display": {
         "preset": "balanced",

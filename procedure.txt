@@ -1,0 +1,18 @@
+配置远程服务器端仓库的步骤：
+ssh-keygen -t ed25519 -C "youremail"
+cat ~/.ssh/id_ed25519.pub
+cd ~/gpufree-data
+git clone git@github.com:LemonQu-GIT/MurasamePet.git
+pip install uv
+cd MurasamePet
+uv sync
+uv run python download.py
+cd gpt_sovits/
+apt update && apt install unzip
+# gpt_sovits/install.sh 218行改为 PYOPENJTALK_PREFIX=$(uv run $PYTHON_CMD -c "import os, pyopenjtalk; print(os.path.dirname(pyopenjtalk.__file__))" 2>/dev/null || echo "")
+bash install.sh --source ModelScope
+cp -r GPT_SoVITS/ ../   # 可能是路径上同时依赖根目录和gpt_sovits/下的GPT_SoVITS，需要想办法修改
+cd ..
+# able to run "uv run python gpt_sovits/api_v2.py"
+# 删掉 api.py 中 if DEVICE in ("cpu", "cuda"): model = model.to(DEVICE) 防止爆显存, then able to run "uv run python api.py"
+# 分别在两个终端挂起 api.py 和 gpt_sovits/api_v2.py

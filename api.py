@@ -150,7 +150,7 @@ def load_model_and_tokenizer():
                 exit(1)
 
             torch_dtype = torch.float16 if DEVICE == "cuda" else torch.float32
-            device_map = "auto" if DEVICE == "cuda" else "cpu"
+            device_map = "balanced" if DEVICE == "cuda" else "cpu"
             if DEVICE == "cpu":
                 print("⚠️  警告: 在 CPU 上加载 14B 模型需要大量内存 (通常 > 32GB)，请确保可用内存充足。")
 
@@ -169,8 +169,8 @@ def load_model_and_tokenizer():
                 device_map=device_map,
             )
 
-            if DEVICE in ("cpu", "cuda"):
-                model = model.to(DEVICE)
+            # if DEVICE in ("cpu", "cuda"):
+            #     model = model.to(DEVICE)
 
             model.eval()
 
@@ -343,61 +343,136 @@ async def create_chat(request: Request):
     return create_response(reply, history)
 
 
+# @api.post("/qwen3")
+# async def create_qwen3_chat(request: Request):
+#     json_post_list = await request.json()
+#     prompt, history = parse_request(json_post_list)
+#     role = json_post_list.get('role', 'user')
+#     log_request(prompt)
+#     if prompt != "":
+#         history = history + [{'role': role, 'content': prompt}]
+
+#     config = get_config()
+#     api_key = config.get('openrouter_api_key', '')
+#     endpoint_url = config.get('server', {}).get('qwen3', '')
+
+#     # 仅当 endpoint 指向 openrouter 且 API key 存在时，才使用 OpenRouter
+#     if "openrouter.ai" in endpoint_url and api_key.strip():
+#         print(f"🌐 检测到 qwen3 endpoint 指向 OpenRouter，使用 API Key 进行调用...")
+#         try:
+#             result = call_openrouter_api(
+#                 config,
+#                 api_key,
+#                 "qwen/qwen3-235b-a22b",
+#                 history,
+#                 max_tokens=4096
+#             )
+#             final_response = result['choices'][0]['message']['content']
+#             print("✅ OpenRouter API 调用成功")
+#         except Exception as e:
+#             error_msg = f"OpenRouter API 错误: {str(e)}"
+#             print(f"❌ {error_msg}")
+#             log_response(error_msg)
+#             return create_response(error_msg, history, status=500)
+#     else:
+#         # 使用本地端点 (Ollama 或其他)
+#         print(f"🏠 使用本地端点 ({endpoint_url}) 进行调用...")
+#         response = None
+#         try:
+#             response = requests.post(
+#                 f"{endpoint_url}/api/chat",
+#                 json={"model": "qwen3:14b", "messages": history,
+#                       "stream": False, "options": {"keep_alive": -1}},
+#             )
+#             response.raise_for_status() # 检查 HTTP 错误
+#             final_response = response.json()['message']['content']
+#             print("✅ 本地 API 调用成功")
+#         except requests.exceptions.RequestException as e:
+#             print(f"❌ 调用本地 API 时出错: {e}")
+#             if response is not None:
+#                 print(f"响应状态: {response.status_code}")
+#                 print(f"响应内容: {response.text[:500]}")
+#             raise
+
+#     history = history + [{'role': 'assistant', 'content': final_response}]
+#     log_response(final_response)
+#     return create_response(final_response, history)
+
 @api.post("/qwen3")
 async def create_qwen3_chat(request: Request):
     json_post_list = await request.json()
-    prompt, history = parse_request(json_post_list)
+    prompt, history = parse_request(json_post_list)  # 解析请求中的prompt和history
     role = json_post_list.get('role', 'user')
     log_request(prompt)
+
+    # 构建对话历史（用户输入 + 历史记录）
     if prompt != "":
         history = history + [{'role': role, 'content': prompt}]
 
-    config = get_config()
-    api_key = config.get('openrouter_api_key', '')
-    endpoint_url = config.get('server', {}).get('qwen3', '')
+    # 配置推理参数（使用请求中的参数或默认值）
+    max_new_tokens = int(json_post_list.get('max_new_tokens', 2048))
+    max_new_tokens = max(1, max_new_tokens)
+    temperature = float(json_post_list.get('temperature', 0.7))
+    top_p = float(json_post_list.get('top_p', 0.9))
+    top_p = max(0.01, min(top_p, 1.0))
 
-    # 仅当 endpoint 指向 openrouter 且 API key 存在时，才使用 OpenRouter
-    if "openrouter.ai" in endpoint_url and api_key.strip():
-        print(f"🌐 检测到 qwen3 endpoint 指向 OpenRouter，使用 API Key 进行调用...")
-        try:
-            result = call_openrouter_api(
-                config,
-                api_key,
-                "qwen/qwen3-235b-a22b",
-                history,
-                max_tokens=4096
+    # 应用聊天模板（适配 Qwen3 的对话格式）
+    print(f"💬 使用 {ENGINE.upper()} 引擎进行 Qwen3 推理...")
+    print(f"📊 最大生成长度: {max_new_tokens} tokens")
+    text = tokenizer.apply_chat_template(
+        history,
+        tokenize=False,
+        add_generation_prompt=True,  # 自动添加 assistant 生成前缀
+        enable_thinking=False,
+    )
+    print("✅ Qwen3 聊天模板应用完成")
+
+    # 调用本地模型生成回复
+    print("🤖 正在生成 Qwen3 回复...")
+    try:
+        if ENGINE == "mlx":
+            # MLX 引擎推理（Apple Silicon）
+            response = generate(
+                model, tokenizer,
+                prompt=text,
+                max_tokens=max_new_tokens,
+                temperature=temperature,
+                top_p=top_p,
+                verbose=False
             )
-            final_response = result['choices'][0]['message']['content']
-            print("✅ OpenRouter API 调用成功")
-        except Exception as e:
-            error_msg = f"OpenRouter API 错误: {str(e)}"
-            print(f"❌ {error_msg}")
-            log_response(error_msg)
-            return create_response(error_msg, history, status=500)
-    else:
-        # 使用本地端点 (Ollama 或其他)
-        print(f"🏠 使用本地端点 ({endpoint_url}) 进行调用...")
-        response = None
-        try:
-            response = requests.post(
-                f"{endpoint_url}/api/chat",
-                json={"model": "qwen3:14b", "messages": history,
-                      "stream": False, "options": {"keep_alive": -1}},
+            reply = response.strip()
+        else:
+            # PyTorch 引擎推理（CUDA/CPU）
+            encoded = tokenizer(
+                text,
+                return_tensors="pt",
             )
-            response.raise_for_status() # 检查 HTTP 错误
-            final_response = response.json()['message']['content']
-            print("✅ 本地 API 调用成功")
-        except requests.exceptions.RequestException as e:
-            print(f"❌ 调用本地 API 时出错: {e}")
-            if response is not None:
-                print(f"响应状态: {response.status_code}")
-                print(f"响应内容: {response.text[:500]}")
-            raise
+            encoded = {k: v.to(DEVICE) for k, v in encoded.items()}
+            generation_kwargs = {
+                "max_new_tokens": max_new_tokens,
+                "do_sample": True,
+                "temperature": max(0.01, temperature),
+                "top_p": top_p,
+                "eos_token_id": tokenizer.eos_token_id,
+                "pad_token_id": tokenizer.eos_token_id,
+            }
+            with torch.no_grad():
+                generated = model.generate(
+                    **encoded,** generation_kwargs,
+                )
+            generated_tokens = generated[0, encoded["input_ids"].shape[-1]:]
+            reply = tokenizer.decode(generated_tokens, skip_special_tokens=True).strip()
 
-    history = history + [{'role': 'assistant', 'content': final_response}]
-    log_response(final_response)
-    return create_response(final_response, history)
+        print(f"✅ Qwen3 回复生成完成 (长度: {len(reply)} 字符)")
+    except Exception as e:
+        error_msg = f"本地 Qwen3 模型推理失败: {str(e)}"
+        print(f"❌ {error_msg}")
+        return create_response(error_msg, history, status=500)
 
+    # 更新对话历史并返回响应
+    history.append({"role": "assistant", "content": reply})
+    log_response(reply)
+    return create_response(reply, history)
 
 @api.post("/qwenvl")
 async def create_qwenvl_chat(request: Request):
@@ -465,11 +540,11 @@ if __name__ == '__main__':
     
     print("=" * 60)
     print("✅ 模型加载完成，启动 FastAPI 服务器...")
-    print(f"🌐 服务地址: http://0.0.0.0:28565")
+    print(f"🌐 服务地址: http://0.0.0.0:8565")
     print(f"📡 可用端点:")
     print(f"   - POST /chat    (主对话接口 - Murasame)")
     print(f"   - POST /qwen3   (通用问答接口 - Qwen3)")
     print(f"   - POST /qwenvl  (视觉理解接口 - Qwen-VL)")
     print("=" * 60)
     
-    uvicorn.run(api, host='0.0.0.0', port=28565, workers=1)
+    uvicorn.run(api, host='0.0.0.0', port=8565, workers=1)

@@ -215,7 +215,7 @@ fi
 # 下载 Open JTalk 字典
 echo -e "${INFO}下载 Open JTalk 字典..."
 if [ -n "$PYTHON_CMD" ]; then
-    PYOPENJTALK_PREFIX=$($PYTHON_CMD -c "import os, pyopenjtalk; print(os.path.dirname(pyopenjtalk.__file__))" 2>/dev/null || echo "")
+    PYOPENJTALK_PREFIX=$(uv run $PYTHON_CMD -c "import os, pyopenjtalk; print(os.path.dirname(pyopenjtalk.__file__))" 2>/dev/null || echo "")
     if [ -n "$PYOPENJTALK_PREFIX" ] && [ ! -d "$PYOPENJTALK_PREFIX/open_jtalk_dic_utf_8-1.11" ]; then
         rm -rf open_jtalk_dic_utf_8-1.11.tar.gz
         run_wget_quiet "$PYOPENJTALK_URL" -O open_jtalk_dic_utf_8-1.11.tar.gz

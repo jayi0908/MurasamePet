@@ -140,9 +140,10 @@ from pydantic import BaseModel
 i18n = I18nAuto()
 cut_method_names = get_cut_method_names()
 
+local_ip = "0.0.0.0"
 parser = argparse.ArgumentParser(description="GPT-SoVITS api")
 parser.add_argument("-c", "--tts_config", type=str, default="gpt_sovits/configs/tts_infer.yaml", help="tts_infer路径")
-parser.add_argument("-a", "--bind_addr", type=str, default="127.0.0.1", help="default: 127.0.0.1")
+parser.add_argument("-a", "--bind_addr", type=str, default=local_ip, help=f"default: {local_ip}")
 parser.add_argument("-p", "--port", type=int, default="9880", help="default: 9880")
 args = parser.parse_args()
 config_path = args.tts_config
